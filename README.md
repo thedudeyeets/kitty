@@ -108,7 +108,7 @@ sgpt configure
 1. **Download the `kitty` script**:
 
 ```bash
-wget https://your-repo-link/kitty -O ~/kitty
+wget https://your-repo-link/kitty](https://github.com/thedudeyeets/kitty -O ~/kitty
 chmod +x ~/kitty
 ```
 
