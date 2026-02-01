@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""
+Server Kitty CLI - Context-Aware MVP with /look enhancements
+Author: Isaac McGinnis
+"""
+
+import os
+import sys
+import subprocess
+import datetime
+import readline
+
+# -------------------
+# File paths for persistent storage
+# -------------------
+HISTORY_FILE = os.path.expanduser("~/.kitty_history")
+TASKS_FILE = os.path.expanduser("~/.kitty_tasks")
+ERRORS_FILE = os.path.expanduser("~/.kitty_errors")
+TERMINAL_OUTPUT_FILE = os.path.expanduser("~/.kitty_terminal_output")
+
+for f in [HISTORY_FILE, TASKS_FILE, ERRORS_FILE, TERMINAL_OUTPUT_FILE]:
+    if not os.path.exists(f):
+        open(f, "a").close()
+
+# -------------------
+# Helper Functions
+# -------------------
+def log_history(message, response):
+    with open(HISTORY_FILE, "a") as f:
+        f.write(f"{datetime.datetime.now()} | You: {message}\n")
+        f.write(f"{datetime.datetime.now()} | Kitty: {response}\n")
+
+def add_task(task):
+    with open(TASKS_FILE, "a") as f:
+        f.write(f"{datetime.datetime.now()} | {task}\n")
+
+def view_tasks():
+    with open(TASKS_FILE, "r") as f:
+        content = f.read().strip()
+    return content if content else "No tasks logged."
+
+def view_memory():
+    with open(HISTORY_FILE, "r") as f:
+        lines = f.readlines()
+    return "".join(lines[-50:]) or "No memory yet."
+
+def view_errors():
+    try:
+        with open("/var/log/syslog", "r") as f:
+            errors = f.readlines()[-50:]
+        with open(ERRORS_FILE, "a") as err_file:
+            err_file.writelines(errors)
+        return "".join(errors) or "No recent errors."
+    except PermissionError:
+        return "Permission denied to read /var/log/syslog. Run as root or sudo."
+
+def server_stats():
+    uptime = subprocess.getoutput("uptime")
+    disk = subprocess.getoutput("df -h /")
+    mem = subprocess.getoutput("free -h")
+    ip = subprocess.getoutput("hostname -I")
+    return f"Uptime: {uptime}\n\nDisk Usage:\n{disk}\n\nMemory Usage:\n{mem}\n\nIP: {ip}"
+
+def standup():
+    tasks = view_tasks()
+    errors = view_errors()
+    return f"--- Standup Summary ---\n\nTasks:\n{tasks}\n\nRecent Errors:\n{errors}"
+
+def ai_response(message, context=""):
+    """
+    Uses sgpt CLI to respond to message.
+    Adds 'kitty cat' personality context and truncates to 3000 chars.
+    """
+    try:
+        # Small personality context for the AI
+        kitty_persona = (
+            "You are a friendly, helpful kitty cat that assists with server tasks. "
+            "You respond politely and clearly, sometimes with playful cat-like expressions."
+        )
+        prompt = f"{kitty_persona}\n{context}\nUser Inquiry: {message}"
+        prompt = prompt[:3000]  # max 3000 chars
+        result = subprocess.getoutput(f"sgpt '{prompt}'")
+        return result
+    except Exception as e:
+        return f"AI error: {e}"
+
+def print_help():
+    help_text = """
+Server Kitty Commands:
+---------------------
+/stats        - Show server stats
+/errors       - Show recent errors
+/tasks        - Show task log
+/memory       - Show recent conversation memory
+/standup      - Show 24h standup summary
+/look <msg>   - Ask Kitty for help using commands, terminal output, and errors
+/help         - Show this help message
+/exit         - Exit interactive mode
+"""
+    print(help_text)
+
+# -------------------
+# Terminal Context for /look
+# -------------------
+def get_terminal_context():
+    """
+    Capture recent shell commands + their output + errors.
+    Truncated for OpenRouter limits.
+    """
+    histfile = os.path.expanduser(os.environ.get("HISTFILE", "~/.bash_history"))
+    try:
+        with open(histfile, "r") as f:
+            commands = f.readlines()[-20:]  # last 20 commands
+        with open(TERMINAL_OUTPUT_FILE, "r") as f:
+            output = f.read()[-1000:]  # last 1000 chars
+        errors = view_errors().splitlines()[-20:]  # last 20 error lines
+
+        context = (
+            "These commands were executed on the server to perform system tasks:\n"
+            f"{''.join(commands)}\n"
+            "Recent terminal output of these commands:\n"
+            f"{output}\n"
+            "Recent errors encountered:\n"
+            f"{''.join(errors)}"
+        )
+        return context
+    except Exception:
+        return f"Recent commands unavailable.\nRecent Errors:\n{view_errors()}"
+
+# -------------------
+# Command Handling
+# -------------------
+def handle_command(cmd):
+    cmd_lower = cmd.lower().strip()
+
+    if not cmd_lower or cmd_lower == "kitty":
+        # Show stats + tip
+        stats = server_stats()
+        print(f"{stats}\n\nTip: Type '/help' to see all Server Kitty commands.")
+        return
+
+    if cmd_lower.startswith("/look"):
+        question = cmd[len("/look"):].strip()
+        if not question:
+            print("Please provide a question after /look")
+            return
+        context = get_terminal_context()
+        response = ai_response(question, context)
+        print(response)
+        log_history("/look " + question, response)
+        add_task("/look " + question)
+    elif cmd_lower in ["/stats", "stats"]:
+        print(server_stats())
+    elif cmd_lower in ["/errors", "errors"]:
+        print(view_errors())
+    elif cmd_lower in ["/tasks", "tasks"]:
+        print(view_tasks())
+    elif cmd_lower in ["/memory", "memory"]:
+        print(view_memory())
+    elif cmd_lower in ["/standup", "standup"]:
+        print(standup())
+    elif cmd_lower in ["/help", "help"]:
+        print_help()
+    elif cmd_lower in ["/exit", "exit"]:
+        sys.exit(0)
+    else:
+        response = ai_response(cmd)
+        print(response)
+        log_history(cmd, response)
+        add_task(cmd)
+
+# -------------------
+# Interactive Mode
+# -------------------
+def interactive_mode():
+    print("Server Kitty Interactive Mode. Type /help for commands.")
+    while True:
+        try:
+            msg = input("ServerKitty> ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting Server Kitty.")
+            break
+
+        if not msg:
+            stats = server_stats()
+            print(f"{stats}\n\nTip: Type '/help' to see all Server Kitty commands.")
+            continue
+
+        handle_command(msg)
+
+# -------------------
+# CLI Entry Point
+# -------------------
+if __name__ == "__main__":
+    try:
+        with open(TERMINAL_OUTPUT_FILE, "a") as f:
+            f.write(subprocess.getoutput("dmesg | tail -n 20") + "\n")
+    except Exception:
+        pass
+
+    if len(sys.argv) == 1:
+        # just 'kitty' → show stats + tip
+        stats = server_stats()
+        print(f"{stats}\n\nTip: Type '/help' to see all Server Kitty commands.")
+    else:
+        if sys.argv[1].lower() == "/look":
+            question = " ".join(sys.argv[2:]).strip()
+            if not question:
+                print("Please provide a question after /look")
+                sys.exit(1)
+            context = get_terminal_context()
+            response = ai_response(question, context)
+            print(response)
+            log_history("/look " + question, response)
+            add_task("/look " + question)
+        else:
+            handle_command(" ".join(sys.argv[1:]))
