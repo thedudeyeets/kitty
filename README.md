@@ -110,10 +110,9 @@ sgpt configure
 ```bash
 wget https://github.com/thedudeyeets/kitty -O ~/kitty
 chmod +x ~/kitty
+```
 
-Got it! Here’s a clear snippet you can add to your README for **macOS users** to download the Kitty script:
-
-### **macOS Installation**
+**macOS Installation**
 
 Download the Kitty script using `curl` (built-in on macOS):
 
