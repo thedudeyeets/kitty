@@ -110,6 +110,21 @@ sgpt configure
 ```bash
 wget https://github.com/thedudeyeets/kitty -O ~/kitty
 chmod +x ~/kitty
+
+Got it! Here’s a clear snippet you can add to your README for **macOS users** to download the Kitty script:
+
+### **macOS Installation**
+
+Download the Kitty script using `curl` (built-in on macOS):
+
+```bash
+curl -L -o kitty https://raw.githubusercontent.com/thedudeyeets/kitty/main/kitty
+chmod +x kitty
+```
+
+* `-L` ensures the command follows redirects.
+* `chmod +x kitty` makes the script executable.
+* After this, you can run Kitty:
 ```
 
 2. **Ensure SGPT is installed and configured** as described above.
