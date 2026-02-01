@@ -135,7 +135,7 @@ echo 'export PATH=$HOME:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-5. **Persistent environment variables**:
+**Persistent environment variables**:
 
 ### Bash (`~/.bashrc` or `~/.bash_profile`)
 
